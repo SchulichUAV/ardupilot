@@ -27,6 +27,8 @@
 #include <AP_Common/Semaphore.h>
 #include <AP_Scheduler/AP_Scheduler.h>
 #include <AP_VisualOdom/AP_VisualOdom.h>
+#include <AP_Wingsensors/AP_Wingsensors.h>
+#include "../../ArduPlane/Plane.h"
 
 #include "GCS.h"
 
@@ -1839,6 +1841,31 @@ void GCS_MAVLINK::send_scaled_pressure2()
 void GCS_MAVLINK::send_scaled_pressure3()
 {
     send_scaled_pressure_instance(2, mavlink_msg_scaled_pressure3_send);
+}
+
+void GCS_MAVLINK::send_wing_sensor_values(wingsensors_t &wing_sensors)
+{
+    // uint32_t now = AP_HAL::millis();
+    mavlink_msg_wing_sensor_values_send(chan,
+                                        wing_sensors.left[0], 
+                                        wing_sensors.left[1],
+                                        wing_sensors.left[2], 
+                                        wing_sensors.left[3],
+                                        wing_sensors.right[0],
+                                        wing_sensors.right[1],
+                                        wing_sensors.right[2], 
+                                        wing_sensors.right[3]);
+}
+
+void GCS_MAVLINK::send_3d_airspeed_values(float three_d_airspeed[])
+{
+    mavlink_msg_three_d_airspeed_values_send(chan,
+                                      three_d_airspeed[0],
+                                      three_d_airspeed[1],
+                                      three_d_airspeed[2],
+                                      three_d_airspeed[3],
+                                      three_d_airspeed[4]
+                                      );
 }
 
 void GCS_MAVLINK::send_sensor_offsets()
@@ -4221,6 +4248,17 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
         CHECK_PAYLOAD_SIZE(SCALED_IMU3);
         send_scaled_imu(2, mavlink_msg_scaled_imu3_send);
         break;
+
+    case MSG_WING_SENSORS:
+        // CHECK_PAYLOAD_SIZE(WING_SENSOR_VALUES);
+        send_wing_sensor_values(plane.wing_sensors);
+        break;
+
+    case MSG_THREE_D_AIRSPEED:
+        // CHECK_PAYLOAD_SIZE(THREE_D_AIRSPEED);
+        send_3d_airspeed_values(plane.three_d_airspeed);
+        break;
+        
 
     case MSG_SCALED_PRESSURE:
         CHECK_PAYLOAD_SIZE(SCALED_PRESSURE);

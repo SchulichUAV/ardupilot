@@ -23,6 +23,7 @@
 #include <AP_RTC/JitterCorrection.h>
 #include <AP_Common/Bitmask.h>
 #include <AP_Devo_Telem/AP_Devo_Telem.h>
+#include <AP_Wingsensors/AP_Wingsensors.h>
 
 #define GCS_DEBUG_SEND_MESSAGE_TIMINGS 0
 
@@ -72,6 +73,8 @@ enum ap_message : uint8_t {
     MSG_AHRS3,
     MSG_HWSTATUS,
     MSG_WIND,
+    MSG_WING_SENSORS,
+    MSG_THREE_D_AIRSPEED,
     MSG_RANGEFINDER,
     MSG_DISTANCE_SENSOR,
     MSG_TERRAIN,
@@ -210,6 +213,8 @@ public:
     void send_scaled_pressure2();
     virtual void send_scaled_pressure3(); // allow sub to override this
     void send_sensor_offsets();
+    void send_wing_sensor_values(wingsensors_t &wing_sensors);
+    void send_3d_airspeed_values(float three_d_airspeed[]);
     virtual void send_simstate() const;
     void send_ahrs();
     void send_battery2();

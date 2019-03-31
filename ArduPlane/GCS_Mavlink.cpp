@@ -299,6 +299,30 @@ void GCS_MAVLINK_Plane::send_simstate() const
 #endif
 }
 
+void Plane::send_wing_sensor(mavlink_channel_t chan)
+{
+    mavlink_msg_wing_sensor_values_send(chan,
+    wing_sensors.left[0],
+    wing_sensors.left[1],
+    wing_sensors.left[2],
+    wing_sensors.left[3],
+    wing_sensors.right[0],
+    wing_sensors.right[1],
+    wing_sensors.right[2],
+    wing_sensors.right[3]
+    );
+}
+
+void Plane::send_3d_airspeed(mavlink_channel_t chan)
+{
+    mavlink_msg_three_d_airspeed_values_send(chan,
+    three_d_airspeed[0],
+    three_d_airspeed[1],
+    three_d_airspeed[2],
+    three_d_airspeed[3],
+    three_d_airspeed[4]);
+}
+
 void Plane::send_wind(mavlink_channel_t chan)
 {
     Vector3f wind = ahrs.wind_estimate();
@@ -449,6 +473,15 @@ bool GCS_MAVLINK_Plane::try_send_message(enum ap_message id)
         break;
     case MSG_LANDING:
         plane.landing.send_landing_message(chan);
+        break;
+    case MSG_WING_SENSORS:
+        plane.send_wing_sensor(chan);
+        // send_wing_sensor_values(plane.wing_sensors);
+        break;
+    case MSG_THREE_D_AIRSPEED:
+        // CHECK_PAYLOAD_SIZE(THREE_D_AIRSPEED);
+        plane.send_3d_airspeed(chan);
+        // send_3d_airspeed_values(plane.three_d_airspeed);
         break;
     default:
         return GCS_MAVLINK::try_send_message(id);
@@ -1346,7 +1379,18 @@ void GCS_MAVLINK_Plane::handleMessage(mavlink_message_t* msg)
     case MAVLINK_MSG_ID_UAVIONIX_ADSB_TRANSCEIVER_HEALTH_REPORT:
         plane.adsb.handle_message(chan, msg);
         break;
-
+    case MAVLINK_MSG_ID_WING_SENSOR_VALUES:
+        mavlink_wing_sensor_values_t wing_values;
+        mavlink_msg_wing_sensor_values_decode(msg, &wing_values);
+        plane.wing_sensors.left[0] = wing_values.sens_1_l;
+        plane.wing_sensors.left[1] = wing_values.sens_2_l;
+        plane.wing_sensors.left[2] = wing_values.sens_3_l;
+        plane.wing_sensors.left[3] = wing_values.sens_4_l;
+        plane.wing_sensors.right[0] = wing_values.sens_1_r;
+        plane.wing_sensors.right[1] = wing_values.sens_2_r;
+        plane.wing_sensors.right[2] = wing_values.sens_3_r;
+        plane.wing_sensors.right[3] = wing_values.sens_4_r;
+        break;
     default:
         handle_common_message(msg);
         break;

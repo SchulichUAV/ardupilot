@@ -96,6 +96,8 @@
 #include <AP_Landing/AP_Landing.h>
 #include <AP_LandingGear/AP_LandingGear.h>     // Landing Gear library
 
+#include <AP_Wingsensors/AP_Wingsensors.h>
+
 #include "GCS_Mavlink.h"
 #include "GCS_Plane.h"
 #include "quadplane.h"
@@ -156,6 +158,7 @@ public:
     friend class GCS_Plane;
     friend class RC_Channel_Plane;
     friend class RC_Channels_Plane;
+    friend class GCS_MAVLINK;
 
     Plane(void);
 
@@ -406,6 +409,12 @@ private:
 
     // Airspeed Sensors
     AP_Airspeed airspeed;
+
+    // Wing Sensors
+    wingsensors_t wing_sensors;
+
+    // 3D Airspeed
+    float three_d_airspeed[5];
 
     // ACRO controller state
     struct {
@@ -783,7 +792,8 @@ private:
     void send_fence_status(mavlink_channel_t chan);
     void send_servo_out(mavlink_channel_t chan);
     void send_wind(mavlink_channel_t chan);
-
+    void send_wing_sensor(mavlink_channel_t chan);
+    void send_3d_airspeed(mavlink_channel_t chan);
     void send_aoa_ssa(mavlink_channel_t chan);
 
     void Log_Write_Fast(void);
