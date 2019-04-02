@@ -593,7 +593,9 @@ static const ap_message STREAM_RAW_SENSORS_msgs[] = {
     MSG_SCALED_PRESSURE,
     MSG_SCALED_PRESSURE2,
     MSG_SCALED_PRESSURE3,
-    MSG_SENSOR_OFFSETS
+    MSG_SENSOR_OFFSETS,
+    MSG_WING_SENSORS,
+    MSG_THREE_D_AIRSPEED
 };
 static const ap_message STREAM_EXTENDED_STATUS_msgs[] = {
     MSG_SYS_STATUS,
@@ -1391,6 +1393,14 @@ void GCS_MAVLINK_Plane::handleMessage(mavlink_message_t* msg)
         plane.wing_sensors.right[2] = wing_values.sens_3_r;
         plane.wing_sensors.right[3] = wing_values.sens_4_r;
         break;
+    case MAVLINK_MSG_ID_THREE_D_AIRSPEED_VALUES:
+        mavlink_three_d_airspeed_values_t three_d_airspeed;
+        mavlink_msg_three_d_airspeed_values_decode(msg, &three_d_airspeed);
+        plane.three_d_airspeed[0] = three_d_airspeed.airsp_1;
+        plane.three_d_airspeed[1] = three_d_airspeed.airsp_2;
+        plane.three_d_airspeed[2] = three_d_airspeed.airsp_3;
+        plane.three_d_airspeed[3] = three_d_airspeed.airsp_4;
+        plane.three_d_airspeed[4] = three_d_airspeed.airsp_5;
     default:
         handle_common_message(msg);
         break;

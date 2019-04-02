@@ -411,10 +411,10 @@ private:
     AP_Airspeed airspeed;
 
     // Wing Sensors
-    wingsensors_t wing_sensors;
+    wingsensors_t wing_sensors = {{-2,-2,-2,-2},{-2,-2,-2,-2}};
 
     // 3D Airspeed
-    float three_d_airspeed[5];
+    float three_d_airspeed[5] = {-2,-2,-2,-2,-2};
 
     // ACRO controller state
     struct {
