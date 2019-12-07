@@ -458,7 +458,12 @@ void Plane::handle_auto_mode(void)
   main flight mode dependent update code 
  */
 void Plane::update_flight_mode(void)
-{
+{    
+    if(control_mode != 0 && control_mode != 2 && control_mode != 5 && control_mode != 6)
+    {
+        control_mode = STABILIZE;
+    }
+
     enum FlightMode effective_mode = control_mode;
     if (control_mode == AUTO && g.auto_fbw_steer == 42) {
         effective_mode = FLY_BY_WIRE_A;
@@ -483,26 +488,28 @@ void Plane::update_flight_mode(void)
 
     switch (effective_mode) 
     {
-    case AUTO:
+    case AUTO:    
         handle_auto_mode();
         break;
-
+    
     case AVOID_ADSB:
-    case GUIDED:
+    case GUIDED:    
         if (auto_state.vtol_loiter && quadplane.available()) {
             quadplane.guided_update();
             break;
         }
         FALLTHROUGH;
-
+    
     case RTL:
-    case LOITER:
+    case LOITER:    
         calc_nav_roll();
         calc_nav_pitch();
         calc_throttle();
         break;
-        
-    case TRAINING: {
+      
+    case TRAINING: 
+    {
+
         training_manual_roll = false;
         training_manual_pitch = false;
         update_load_factor();
@@ -534,7 +541,8 @@ void Plane::update_flight_mode(void)
         break;
     }
 
-    case ACRO: {
+    case ACRO: 
+    {
         // handle locked/unlocked control
         if (acro_state.locked_roll) {
             nav_roll_cd = acro_state.locked_roll_err;
@@ -549,6 +557,78 @@ void Plane::update_flight_mode(void)
         break;
     }
 
+        
+    case CRUISE:
+        /*
+          in CRUISE mode we use the navigation code to control
+          roll when heading is locked. Heading becomes unlocked on
+          any aileron or rudder input
+        */    
+        if (channel_roll->get_control_in() != 0 || channel_rudder->get_control_in() != 0) {
+            cruise_state.locked_heading = false;
+            cruise_state.lock_timer_ms = 0;
+        }                 
+        
+        if (!cruise_state.locked_heading) {
+            nav_roll_cd = channel_roll->norm_input() * roll_limit_cd;
+            nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
+            update_load_factor();
+        } else {
+            calc_nav_roll();
+        }
+        update_fbwb_speed_height();
+        break;
+    
+    case STABILIZE:    
+        nav_roll_cd        = 0;
+        nav_pitch_cd       = 0;
+        // throttle is passthrough
+        break;
+      
+    case CIRCLE:    
+        // we have no GPS installed and have lost radio contact
+        // or we just want to fly around in a gentle circle w/o GPS,
+        // holding altitude at the altitude we set when we
+        // switched into the mode
+        nav_roll_cd  = roll_limit_cd / 3;
+        update_load_factor();
+        calc_nav_pitch();
+        calc_throttle();
+        break;
+    
+
+    case QSTABILIZE:
+    case QHOVER:
+    case QLOITER:
+    case QLAND:
+    case QRTL: {
+        // set nav_roll and nav_pitch using sticks        
+        int16_t roll_limit = MIN(roll_limit_cd, quadplane.aparm.angle_max);
+        nav_roll_cd  = (channel_roll->get_control_in() / 4500.0) * roll_limit;
+        nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit, roll_limit);
+        float pitch_input = channel_pitch->norm_input();
+        // Scale from normalized input [-1,1] to centidegrees
+        if (quadplane.tailsitter_active()) {
+            // For tailsitters, the pitch range is symmetrical: [-Q_ANGLE_MAX,Q_ANGLE_MAX]
+            nav_pitch_cd = pitch_input * quadplane.aparm.angle_max;
+        } else {
+            // pitch is further constrained by LIM_PITCH_MIN/MAX which may impose
+            // tighter (possibly asymmetrical) limits than Q_ANGLE_MAX
+            if (pitch_input > 0) {
+                nav_pitch_cd = pitch_input * MIN(aparm.pitch_limit_max_cd, quadplane.aparm.angle_max);
+            } else {
+                nav_pitch_cd = pitch_input * MIN(-pitch_limit_min_cd, quadplane.aparm.angle_max);
+            }
+            nav_pitch_cd = constrain_int32(nav_pitch_cd, pitch_limit_min_cd, aparm.pitch_limit_max_cd.get());
+        }
+        break;
+    
+    }
+    case MANUAL:
+        SRV_Channels::set_output_scaled(SRV_Channel::k_aileron, channel_roll->get_control_in_zero_dz());
+        SRV_Channels::set_output_scaled(SRV_Channel::k_elevator, channel_pitch->get_control_in_zero_dz());
+        steering_control.steering = steering_control.rudder = channel_rudder->get_control_in_zero_dz();
+        break;
     case AUTOTUNE:
     case FLY_BY_WIRE_A: {
         // set nav_roll and nav_pitch using sticks
@@ -592,78 +672,7 @@ void Plane::update_flight_mode(void)
         update_load_factor();
         update_fbwb_speed_height();
         break;
-        
-    case CRUISE:
-        /*
-          in CRUISE mode we use the navigation code to control
-          roll when heading is locked. Heading becomes unlocked on
-          any aileron or rudder input
-        */
-        if (channel_roll->get_control_in() != 0 || channel_rudder->get_control_in() != 0) {
-            cruise_state.locked_heading = false;
-            cruise_state.lock_timer_ms = 0;
-        }                 
-        
-        if (!cruise_state.locked_heading) {
-            nav_roll_cd = channel_roll->norm_input() * roll_limit_cd;
-            nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
-            update_load_factor();
-        } else {
-            calc_nav_roll();
-        }
-        update_fbwb_speed_height();
-        break;
-        
-    case STABILIZE:
-        nav_roll_cd        = 0;
-        nav_pitch_cd       = 0;
-        // throttle is passthrough
-        break;
-        
-    case CIRCLE:
-        // we have no GPS installed and have lost radio contact
-        // or we just want to fly around in a gentle circle w/o GPS,
-        // holding altitude at the altitude we set when we
-        // switched into the mode
-        nav_roll_cd  = roll_limit_cd / 3;
-        update_load_factor();
-        calc_nav_pitch();
-        calc_throttle();
-        break;
 
-    case MANUAL:
-        SRV_Channels::set_output_scaled(SRV_Channel::k_aileron, channel_roll->get_control_in_zero_dz());
-        SRV_Channels::set_output_scaled(SRV_Channel::k_elevator, channel_pitch->get_control_in_zero_dz());
-        steering_control.steering = steering_control.rudder = channel_rudder->get_control_in_zero_dz();
-        break;
-
-    case QSTABILIZE:
-    case QHOVER:
-    case QLOITER:
-    case QLAND:
-    case QRTL: {
-        // set nav_roll and nav_pitch using sticks
-        int16_t roll_limit = MIN(roll_limit_cd, quadplane.aparm.angle_max);
-        nav_roll_cd  = (channel_roll->get_control_in() / 4500.0) * roll_limit;
-        nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit, roll_limit);
-        float pitch_input = channel_pitch->norm_input();
-        // Scale from normalized input [-1,1] to centidegrees
-        if (quadplane.tailsitter_active()) {
-            // For tailsitters, the pitch range is symmetrical: [-Q_ANGLE_MAX,Q_ANGLE_MAX]
-            nav_pitch_cd = pitch_input * quadplane.aparm.angle_max;
-        } else {
-            // pitch is further constrained by LIM_PITCH_MIN/MAX which may impose
-            // tighter (possibly asymmetrical) limits than Q_ANGLE_MAX
-            if (pitch_input > 0) {
-                nav_pitch_cd = pitch_input * MIN(aparm.pitch_limit_max_cd, quadplane.aparm.angle_max);
-            } else {
-                nav_pitch_cd = pitch_input * MIN(-pitch_limit_min_cd, quadplane.aparm.angle_max);
-            }
-            nav_pitch_cd = constrain_int32(nav_pitch_cd, pitch_limit_min_cd, aparm.pitch_limit_max_cd.get());
-        }
-        break;
-    }
-        
     case INITIALISING:
         // handled elsewhere
         break;
@@ -682,13 +691,13 @@ void Plane::update_navigation()
     }
     
     switch(control_mode) {
-    case AUTO:
+    case AUTO:    
         if (ahrs.home_is_set()) {
             mission.update();
         }
         break;
-            
-    case RTL:
+         
+    case RTL:    
         if (quadplane.available() && quadplane.rtl_mode == 1 &&
             (nav_controller->reached_loiter_target() ||
              location_passed_point(current_loc, prev_WP_loc, next_WP_loc) ||
@@ -698,7 +707,7 @@ void Plane::update_navigation()
               for a quadplane in RTL mode we switch to QRTL when we
               are within the maximum of the stopping distance and the
               RTL_RADIUS
-             */
+            */ 
             set_mode(QRTL, MODE_REASON_UNKNOWN);
             break;
         } else if (g.rtl_autoland == 1 &&
@@ -733,17 +742,17 @@ void Plane::update_navigation()
         }
         // fall through to LOITER
         FALLTHROUGH;
-
+    
     case LOITER:
     case AVOID_ADSB:
-    case GUIDED:
+    case GUIDED:    
         update_loiter(radius);
         break;
-
-    case CRUISE:
+    
+    case CRUISE:    
         update_cruise();
         break;
-
+    
     case MANUAL:
     case STABILIZE:
     case TRAINING:
@@ -838,7 +847,7 @@ void Plane::update_flight_stage(void)
 {
     // Update the speed & height controller states
     if (auto_throttle_mode && !throttle_suppressed) {        
-        if (control_mode==AUTO) {
+        if (control_mode==AUTO) {           
             if (quadplane.in_vtol_auto()) {
                 set_flight_stage(AP_Vehicle::FixedWing::FLIGHT_VTOL);
             } else if (auto_state.takeoff_complete == false) {
@@ -858,7 +867,7 @@ void Plane::update_flight_stage(void)
                 set_flight_stage(AP_Vehicle::FixedWing::FLIGHT_VTOL);
             } else {
                 set_flight_stage(AP_Vehicle::FixedWing::FLIGHT_NORMAL);
-            }
+            }            
         } else {
             // If not in AUTO then assume normal operation for normal TECS operation.
             // This prevents TECS from being stuck in the wrong stage if you switch from
